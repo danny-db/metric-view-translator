@@ -88,15 +88,23 @@ _table_verified = False
 
 
 def _ensure_audit_table(token: str) -> str:
-    """Ensure the audit table exists. Try CREATE; if storage blocks it, check if it already exists."""
+    """Ensure the audit table exists. Creates schema and table if needed."""
     global _table_verified
     cfg = get_config()
-    fq = f"{cfg['audit_catalog']}.{cfg['audit_schema']}.{cfg['audit_table']}"
+    catalog = cfg['audit_catalog']
+    schema = cfg['audit_schema']
+    fq = f"{catalog}.{schema}.{cfg['audit_table']}"
 
     if _table_verified:
         return fq
 
-    # Try CREATE TABLE (works if user has storage access, e.g. from a cluster)
+    # Step 1: Ensure the schema exists
+    try:
+        _exec_sql(token, f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+    except Exception as schema_err:
+        logger.info(f"CREATE SCHEMA skipped (may already exist or no permission): {schema_err}")
+
+    # Step 2: Create the table
     try:
         _exec_sql(token, _TABLE_DDL.format(fq=fq))
         _table_verified = True
@@ -104,7 +112,7 @@ def _ensure_audit_table(token: str) -> str:
     except Exception as create_err:
         logger.info(f"CREATE TABLE failed (may already exist): {create_err}")
 
-    # CREATE failed — check if table already exists (created from notebook/cluster)
+    # Step 3: Check if table already exists (created by another method)
     try:
         result = _exec_sql(token, f"DESCRIBE TABLE {fq}")
         if result.get("status", {}).get("state") == "SUCCEEDED":
@@ -120,8 +128,9 @@ def _ensure_audit_table(token: str) -> str:
         pass
 
     raise RuntimeError(
-        f"Audit table {fq} does not exist and cannot be created from this warehouse "
-        f"(storage permission). Please run this in a notebook:\n\n{_TABLE_DDL.format(fq=fq)}"
+        f"Audit table {fq} does not exist and cannot be created. "
+        f"Please run this in a Databricks notebook:\n\n"
+        f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};\n{_TABLE_DDL.format(fq=fq)}"
     )
 
 
