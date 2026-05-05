@@ -104,15 +104,7 @@ def _ensure_audit_table(token: str) -> str:
     except Exception as schema_err:
         logger.info(f"CREATE SCHEMA skipped (may already exist or no permission): {schema_err}")
 
-    # Step 2: Create the table
-    try:
-        _exec_sql(token, _TABLE_DDL.format(fq=fq))
-        _table_verified = True
-        return fq
-    except Exception as create_err:
-        logger.info(f"CREATE TABLE failed (may already exist): {create_err}")
-
-    # Step 3: Check if table already exists (created by another method)
+    # Step 2: Check if table already exists first
     try:
         result = _exec_sql(token, f"DESCRIBE TABLE {fq}")
         if result.get("status", {}).get("state") == "SUCCEEDED":
@@ -127,11 +119,17 @@ def _ensure_audit_table(token: str) -> str:
     except Exception:
         pass
 
-    raise RuntimeError(
-        f"Audit table {fq} does not exist and cannot be created. "
-        f"Please run this in a Databricks notebook:\n\n"
-        f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};\n{_TABLE_DDL.format(fq=fq)}"
-    )
+    # Step 3: Table doesn't exist — create it
+    try:
+        _exec_sql(token, _TABLE_DDL.format(fq=fq))
+        _table_verified = True
+        return fq
+    except Exception as create_err:
+        raise RuntimeError(
+            f"Audit table {fq} does not exist. Auto-create failed: {create_err}\n\n"
+            f"Run this in a Databricks notebook:\n"
+            f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};\n{_TABLE_DDL.format(fq=fq)}"
+        ) from create_err
 
 
 def _sql_str(s: str) -> str:
