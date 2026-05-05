@@ -87,6 +87,17 @@ _TABLE_DDL = """CREATE TABLE IF NOT EXISTS {fq} (
 _table_verified = False
 
 
+def _sql_succeeded(result: dict) -> bool:
+    """Check if a Statement Execution API result indicates success."""
+    return result.get("status", {}).get("state") == "SUCCEEDED"
+
+
+def _sql_error_msg(result: dict) -> str:
+    """Extract error message from a failed Statement Execution API result."""
+    err = result.get("status", {}).get("error", {})
+    return err.get("message", str(err)) if isinstance(err, dict) else str(err)
+
+
 def _ensure_audit_table(token: str) -> str:
     """Ensure the audit table exists. Creates schema and table if needed."""
     global _table_verified
@@ -98,18 +109,11 @@ def _ensure_audit_table(token: str) -> str:
     if _table_verified:
         return fq
 
-    # Step 1: Ensure the schema exists
-    try:
-        _exec_sql(token, f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
-    except Exception as schema_err:
-        logger.info(f"CREATE SCHEMA skipped (may already exist or no permission): {schema_err}")
-
-    # Step 2: Check if table already exists first
+    # Step 1: Check if table already exists
     try:
         result = _exec_sql(token, f"DESCRIBE TABLE {fq}")
-        if result.get("status", {}).get("state") == "SUCCEEDED":
+        if _sql_succeeded(result):
             _table_verified = True
-            # Migrate: add columns if missing
             for col in ("deploy_status", "error_message"):
                 try:
                     _exec_sql(token, f"ALTER TABLE {fq} ADD COLUMN IF NOT EXISTS {col} STRING")
@@ -119,17 +123,26 @@ def _ensure_audit_table(token: str) -> str:
     except Exception:
         pass
 
-    # Step 3: Table doesn't exist — create it
+    # Step 2: Table doesn't exist — create schema, then table
     try:
-        _exec_sql(token, _TABLE_DDL.format(fq=fq))
-        _table_verified = True
-        return fq
-    except Exception as create_err:
-        raise RuntimeError(
-            f"Audit table {fq} does not exist. Auto-create failed: {create_err}\n\n"
-            f"Run this in a Databricks notebook:\n"
-            f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};\n{_TABLE_DDL.format(fq=fq)}"
-        ) from create_err
+        _exec_sql(token, f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema}")
+    except Exception:
+        pass
+
+    try:
+        result = _exec_sql(token, _TABLE_DDL.format(fq=fq))
+        if _sql_succeeded(result):
+            _table_verified = True
+            return fq
+        create_err_msg = _sql_error_msg(result)
+    except Exception as e:
+        create_err_msg = str(e)
+
+    raise RuntimeError(
+        f"Audit table {fq} does not exist. Auto-create failed: {create_err_msg}\n\n"
+        f"Run this SQL in a Databricks notebook to create it:\n\n"
+        f"CREATE SCHEMA IF NOT EXISTS {catalog}.{schema};\n{_TABLE_DDL.format(fq=fq)}"
+    )
 
 
 def _sql_str(s: str) -> str:
