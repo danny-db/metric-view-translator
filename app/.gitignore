@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+.env
+node_modules/
+frontend/src/
+frontend/public/
+frontend/*.config.*
+frontend/*.json
+frontend/*.html
+.DS_Store
+.databricks/

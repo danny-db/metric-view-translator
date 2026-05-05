@@ -1,0 +1,13 @@
+TableName,MeasureName,Expression,Description
+Sales,Total Sales,SUM(Sales[Amount]),Base total sales measure
+Sales,Order Count,COUNTROWS(Sales),Total number of orders
+Sales,Unique Customers,"DISTINCTCOUNT(Sales[CustomerID])",Count of unique customers
+Sales,Average Order Value,"AVERAGE(Sales[Amount])",Average amount per order
+Sales,Active Revenue,"CALCULATE(SUM(Sales[Amount]), Sales[Status]=""Active"")",Revenue from active orders only
+Sales,Premium Revenue,"CALCULATE(SUM(Sales[Amount]), Sales[Status]=""Active"", Sales[Tier]=""Premium"")",Revenue from active premium orders
+Sales,Line Total,"SUMX(Sales, Sales[Quantity] * Sales[UnitPrice])",Row-level quantity times price
+Sales,Revenue per Customer,[Total Sales] / DISTINCTCOUNT(Sales[CustomerID]),Composite: total sales divided by unique customers
+Sales,Profit Margin,"DIVIDE(SUM(Sales[Profit]), SUM(Sales[Revenue]), 0)",Profit as percentage of revenue
+Sales,Premium Ratio,"DIVIDE([Premium Revenue], [Total Sales], 0)",Composite: premium share of total
+Sales,YTD Sales,"TOTALYTD(SUM(Sales[Amount]), Calendar[Date])",Year-to-date cumulative sales (window measure)
+Sales,Sales Rank,"RANKX(ALL(Sales), [Total Sales])",Rank by total sales (unsupported)

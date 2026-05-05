@@ -1,0 +1,189 @@
+{
+  "name": "SalesAnalyticsModel",
+  "compatibilityLevel": 1567,
+  "model": {
+    "culture": "en-AU",
+    "tables": [
+      {
+        "name": "Sales",
+        "columns": [
+          { "name": "OrderID", "dataType": "int64", "sourceColumn": "order_id" },
+          { "name": "CustomerID", "dataType": "int64", "sourceColumn": "customer_id" },
+          { "name": "ProductID", "dataType": "int64", "sourceColumn": "product_id" },
+          { "name": "DateKey", "dataType": "dateTime", "sourceColumn": "date_key" },
+          { "name": "Amount", "dataType": "decimal", "sourceColumn": "amount" },
+          { "name": "Quantity", "dataType": "int64", "sourceColumn": "quantity" },
+          { "name": "UnitPrice", "dataType": "decimal", "sourceColumn": "unit_price" },
+          { "name": "Profit", "dataType": "decimal", "sourceColumn": "profit" },
+          { "name": "Revenue", "dataType": "decimal", "sourceColumn": "revenue" },
+          { "name": "Status", "dataType": "string", "sourceColumn": "status" },
+          { "name": "Region", "dataType": "string", "sourceColumn": "region" },
+          { "name": "Tier", "dataType": "string", "sourceColumn": "tier" }
+        ],
+        "measures": [
+          {
+            "name": "Total Sales",
+            "expression": "SUM(Sales[Amount])",
+            "description": "Base total sales measure"
+          },
+          {
+            "name": "Order Count",
+            "expression": "COUNTROWS(Sales)",
+            "description": "Total number of orders"
+          },
+          {
+            "name": "Unique Customers",
+            "expression": "DISTINCTCOUNT(Sales[CustomerID])",
+            "description": "Count of distinct customers"
+          },
+          {
+            "name": "Average Order Value",
+            "expression": "AVERAGE(Sales[Amount])",
+            "description": "Average sales amount per order"
+          },
+          {
+            "name": "Active Revenue",
+            "expression": "CALCULATE(SUM(Sales[Amount]), Sales[Status]=\"Active\")",
+            "description": "Revenue from active orders only"
+          },
+          {
+            "name": "Premium Revenue",
+            "expression": "CALCULATE(SUM(Sales[Amount]), Sales[Status]=\"Active\", Sales[Tier]=\"Premium\")",
+            "description": "Revenue from active premium orders"
+          },
+          {
+            "name": "East Region Sales",
+            "expression": "CALCULATE(SUM(Sales[Amount]), Sales[Region]=\"East\")",
+            "description": "Sales filtered to East region"
+          },
+          {
+            "name": "Line Total",
+            "expression": "SUMX(Sales, Sales[Quantity] * Sales[UnitPrice])",
+            "description": "Row-level quantity times unit price"
+          },
+          {
+            "name": "Revenue per Customer",
+            "expression": "[Total Sales] / DISTINCTCOUNT(Sales[CustomerID])",
+            "description": "Composite: average revenue per unique customer"
+          },
+          {
+            "name": "Profit Margin",
+            "expression": "DIVIDE(SUM(Sales[Profit]), SUM(Sales[Revenue]), 0)",
+            "description": "Profit as a percentage of revenue"
+          },
+          {
+            "name": "Premium Ratio",
+            "expression": "DIVIDE([Premium Revenue], [Total Sales], 0)",
+            "description": "Composite: premium share of total revenue"
+          },
+          {
+            "name": "Active Share",
+            "expression": "DIVIDE([Active Revenue], [Total Sales], 0)",
+            "description": "Composite: active share of total revenue"
+          },
+          {
+            "name": "YTD Sales",
+            "expression": "TOTALYTD(SUM(Sales[Amount]), Calendar[Date])",
+            "description": "Year-to-date cumulative sales (window measure)"
+          },
+          {
+            "name": "Prior Year Sales",
+            "expression": "CALCULATE(SUM(Sales[Amount]), SAMEPERIODLASTYEAR(Calendar[Date]))",
+            "description": "Same period last year (time intelligence warning)"
+          },
+          {
+            "name": "Sales Rank",
+            "expression": "RANKX(ALL(Sales), [Total Sales])",
+            "description": "Rank by total sales (unsupported pattern)"
+          }
+        ],
+        "partitions": [
+          {
+            "name": "Sales",
+            "source": {
+              "type": "m",
+              "expression": "let Source = Databricks.Contents(\"adb-xxx.azuredatabricks.net\", \"/sql/1.0/warehouses/abc\", [Catalog=\"main\", Database=\"dax_translator_test\"]), fact_sales = Source{[Schema=\"dax_translator_test\",Item=\"fact_sales\"]}[Data] in fact_sales"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DimCustomer",
+        "columns": [
+          { "name": "CustomerID", "dataType": "int64", "sourceColumn": "customer_id" },
+          { "name": "Name", "dataType": "string", "sourceColumn": "name" },
+          { "name": "Segment", "dataType": "string", "sourceColumn": "segment" },
+          { "name": "Country", "dataType": "string", "sourceColumn": "country" }
+        ],
+        "partitions": [
+          {
+            "name": "DimCustomer",
+            "source": {
+              "type": "m",
+              "expression": "let Source = Databricks.Contents(\"adb-xxx.azuredatabricks.net\", \"/sql/1.0/warehouses/abc\", [Catalog=\"main\", Database=\"dax_translator_test\"]), dim_customer = Source{[Schema=\"dax_translator_test\",Item=\"dim_customer\"]}[Data] in dim_customer"
+            }
+          }
+        ]
+      },
+      {
+        "name": "DimProduct",
+        "columns": [
+          { "name": "ProductID", "dataType": "int64", "sourceColumn": "product_id" },
+          { "name": "ProductName", "dataType": "string", "sourceColumn": "product_name" },
+          { "name": "Category", "dataType": "string", "sourceColumn": "category" }
+        ],
+        "partitions": [
+          {
+            "name": "DimProduct",
+            "source": {
+              "type": "m",
+              "expression": "let Source = Databricks.Contents(\"adb-xxx.azuredatabricks.net\", \"/sql/1.0/warehouses/abc\", [Catalog=\"main\", Database=\"dax_translator_test\"]), dim_product = Source{[Schema=\"dax_translator_test\",Item=\"dim_product\"]}[Data] in dim_product"
+            }
+          }
+        ]
+      },
+      {
+        "name": "Calendar",
+        "columns": [
+          { "name": "Date", "dataType": "dateTime", "sourceColumn": "date" },
+          { "name": "Year", "dataType": "int64", "sourceColumn": "year" },
+          { "name": "Month", "dataType": "int64", "sourceColumn": "month" },
+          { "name": "Quarter", "dataType": "string", "sourceColumn": "quarter" },
+          { "name": "MonthStart", "dataType": "dateTime", "sourceColumn": "month_start" }
+        ],
+        "partitions": [
+          {
+            "name": "Calendar",
+            "source": {
+              "type": "m",
+              "expression": "let Source = Databricks.Contents(\"adb-xxx.azuredatabricks.net\", \"/sql/1.0/warehouses/abc\", [Catalog=\"main\", Database=\"dax_translator_test\"]), dim_date = Source{[Schema=\"dax_translator_test\",Item=\"dim_date\"]}[Data] in dim_date"
+            }
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "name": "Sales_to_Customer",
+        "fromTable": "Sales",
+        "fromColumn": "CustomerID",
+        "toTable": "DimCustomer",
+        "toColumn": "CustomerID"
+      },
+      {
+        "name": "Sales_to_Product",
+        "fromTable": "Sales",
+        "fromColumn": "ProductID",
+        "toTable": "DimProduct",
+        "toColumn": "ProductID"
+      },
+      {
+        "name": "Sales_to_Calendar",
+        "fromTable": "Sales",
+        "fromColumn": "DateKey",
+        "toTable": "Calendar",
+        "toColumn": "Date"
+      }
+    ]
+  }
+}

@@ -1,0 +1,16 @@
+# Mapping config for CSV/MDX imports that lack schema metadata.
+# Used by batch_translator.py to resolve DAX/MDX table references
+# to fully-qualified Databricks tables.
+
+fact_table: main.dax_translator_test.fact_sales
+
+dimension_tables:
+  - table: main.dax_translator_test.dim_customer
+    join_key: customer_id
+    dim_key: customer_id
+  - table: main.dax_translator_test.dim_product
+    join_key: product_id
+    dim_key: product_id
+  - table: main.dax_translator_test.dim_date
+    join_key: date_key
+    dim_key: date

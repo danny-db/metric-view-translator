@@ -1,0 +1,78 @@
+-- MDX Script for SalesAnalysis cube
+-- Exported from SSMS / Cube Designer
+
+CALCULATE;
+
+-- Base aggregations
+CREATE MEMBER CURRENTCUBE.[Measures].[Total Sales]
+AS SUM([Measures].[Amount]),
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+CREATE MEMBER CURRENTCUBE.[Measures].[Order Count]
+AS COUNT([Measures].[Order Id]),
+FORMAT_STRING = "#,##0",
+VISIBLE = 1;
+
+CREATE MEMBER CURRENTCUBE.[Measures].[Distinct Customers]
+AS DISTINCTCOUNT([Customer].[Customer Id].[Customer Id].MEMBERS),
+FORMAT_STRING = "#,##0",
+VISIBLE = 1;
+
+CREATE MEMBER CURRENTCUBE.[Measures].[Average Order Value]
+AS [Measures].[Total Sales] / [Measures].[Order Count],
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+-- Conditional: active revenue
+CREATE MEMBER CURRENTCUBE.[Measures].[Active Revenue]
+AS IIF(
+    [Status].CURRENTMEMBER IS [Status].&[Active],
+    [Measures].[Total Sales],
+    NULL
+),
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+-- Ratio with safe division
+CREATE MEMBER CURRENTCUBE.[Measures].[Profit Margin]
+AS IIF(
+    [Measures].[Revenue] <> 0,
+    [Measures].[Profit] / [Measures].[Revenue],
+    0
+),
+FORMAT_STRING = "0.00%",
+VISIBLE = 1;
+
+-- Tuple filter: premium segment
+CREATE MEMBER CURRENTCUBE.[Measures].[Premium Sales]
+AS ([Status].&[Active], [Tier].&[Premium], [Measures].[Amount]),
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+-- Time intelligence: YTD
+CREATE MEMBER CURRENTCUBE.[Measures].[YTD Sales]
+AS AGGREGATE(
+    PERIODSTODATE([Date].[Calendar].[Year], [Date].[Calendar].CURRENTMEMBER),
+    [Measures].[Amount]
+),
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+-- Time intelligence: prior year (generates warning)
+CREATE MEMBER CURRENTCUBE.[Measures].[Prior Year Sales]
+AS (
+    PARALLELPERIOD([Date].[Calendar].[Year], 1, [Date].[Calendar].CURRENTMEMBER),
+    [Measures].[Total Sales]
+),
+FORMAT_STRING = "$#,##0.00",
+VISIBLE = 1;
+
+-- Unsupported: RANK
+CREATE MEMBER CURRENTCUBE.[Measures].[Sales Rank]
+AS RANK(
+    [Customer].[Name].CURRENTMEMBER,
+    ORDER([Customer].[Name].[Name].MEMBERS, [Measures].[Total Sales], BDESC)
+),
+FORMAT_STRING = "#,##0",
+VISIBLE = 1;

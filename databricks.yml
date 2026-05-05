@@ -1,0 +1,101 @@
+bundle:
+  name: metric-view-translator
+  databricks_cli_version: ">= 0.230.0"
+
+variables:
+  warehouse_id:
+    description: SQL warehouse ID for the app and notebooks
+  serving_endpoint:
+    description: Claude model serving endpoint name
+    default: databricks-claude-sonnet-4-6
+  target_catalog:
+    description: Catalog for metric views and test data
+    default: main
+  target_schema:
+    description: Schema for metric views and test data
+    default: dax_translator_test
+
+sync:
+  exclude:
+    - .venv/
+    - .pytest_cache/
+    - tests/
+    - src/
+    - __pycache__/
+    - node_modules/
+    - app/frontend/src/
+    - app/frontend/*.config.*
+    - app/frontend/*.json
+    - app/frontend/*.html
+    - uv.lock
+
+resources:
+  apps:
+    translator_app:
+      name: metric-view-translator
+      description: "DAX/MDX to Databricks Metric View translator (React + FastAPI)"
+      source_code_path: ./app
+      config:
+        command:
+          - uvicorn
+          - backend.main:app
+          - --host
+          - "0.0.0.0"
+          - --port
+          - "8000"
+        env:
+          - name: DATABRICKS_WAREHOUSE_ID
+            value_from: sql-warehouse
+          - name: SERVING_ENDPOINT_NAME
+            value_from: serving-endpoint
+      resources:
+        - name: sql-warehouse
+          description: SQL warehouse for deploying and querying metric views
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+        - name: serving-endpoint
+          description: Claude model serving endpoint for translation
+          serving_endpoint:
+            name: ${var.serving_endpoint}
+            permission: CAN_QUERY
+      user_api_scopes:
+        - sql
+      permissions:
+        - level: CAN_MANAGE
+          user_name: ${workspace.current_user.userName}
+
+  jobs:
+    batch_translator:
+      name: "[${bundle.target}] Batch DAX/MDX Translator"
+      description: "Batch translate exported Power BI (BIM/CSV) or SSAS (MDX) measures into Metric Views"
+      tasks:
+        - task_key: batch_translate
+          notebook_task:
+            notebook_path: ./notebooks/batch/batch_translator.py
+            base_parameters:
+              source_file: /Volumes/${var.target_catalog}/${var.target_schema}/batch_samples/sample_powerbi_export.bim
+              source_format: auto
+              mapping_file: ""
+              target_catalog: ${var.target_catalog}
+              target_schema: ${var.target_schema}
+              serving_endpoint: ${var.serving_endpoint}
+              auto_deploy: "false"
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+
+targets:
+  dev:
+    default: true
+    mode: development
+
+  prod:
+    mode: production
+    workspace:
+      root_path: /Shared/.bundle/${bundle.name}/${bundle.target}
+    permissions:
+      - level: CAN_VIEW
+        group_name: users
